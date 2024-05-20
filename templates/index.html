@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title></title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-T3c6CoIi6uLrA9TneNEoa7RxnatzjcDSCmG1MXxSR1GAsXEV/Dwwykc2MPK8M2HN" crossorigin="anonymous">
+    <style>
+        html {
+            height: 100vh;
+        }
+
+        body {
+            height: 100vh;
+            background-color: transparent;
+            margin: 0;
+            overflow: hidden;
+        }
+
+        #canvas-container {
+            position: absolute;
+            top: 0;
+            left: 0;
+            z-index: -1;
+        }
+
+        .buttonContainer {
+            width: 100vw;
+            position: absolute;
+            bottom: 0;
+            display: flex;
+            justify-content: center;
+        }
+        .input-group{
+            width: 60%;
+        }
+        .cardContainer {
+            margin: 3% 3% 3% 3%;
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            z-index: 1;
+        }
+
+        .custom-card {
+            width: 15rem;
+            margin: 1rem;
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 16px;
+            box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1);
+            backdrop-filter: blur(5px);
+            -webkit-backdrop-filter: blur(5px);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            overflow: hidden;
+            color: white;
+        }
+
+        .custom-card .card-body {
+            padding: 1rem;
+        }
+
+        #carga {
+            width: 100%;
+            height: 5px;
+            background-color: #ddd;
+        }
+
+        #progreso {
+            width: 0;
+            height: 100%;
+            background-color: #4caf50;
+        }
+    </style>
+</head>
+<body>
+    <div id="carga">
+        <div id="progreso"></div>
+    </div>
+    <div class="cardContainer" id="cardContainer">
+    </div>
+    <div class="buttonContainer">
+        <div class="input-group mb-3">
+            <input type="text" id="paisInput" class="form-control" placeholder="Busca un país (en ingles)" aria-label="Recipient's username" aria-describedby="button-addon2">
+            <button class="btn btn-outline-secondary" type="button" id="buscarBtn">Enviar</button>
+        </div>
+    </div>
+    <div id="canvas-container"></div>
+    <script>
+
+        // Actualiza la barra de carga o rueda de carga con el progreso
+        function actualizarCarga(progreso) {
+            document.getElementById('progreso').style.width = progreso + '%';
+        }
+
+         function cargarDatos() {
+            // Realiza una solicitud AJAX para obtener el progreso de carga
+            var xhr = new XMLHttpRequest();
+            xhr.open('GET', '/progreso', true);
+            xhr.onreadystatechange = function () {
+                if (xhr.readyState == 4 && xhr.status == 200) {
+                    var progreso = JSON.parse(xhr.responseText).progreso;
+                    actualizarCarga(progreso);
+                }
+            };
+            xhr.send();
+        }
+
+        // Llama a cargarDatos() periódicamente
+        setInterval(cargarDatos, 1000);
+
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        window.addEventListener('resize', onWindowResize);
+
+        function buscar() {
+            var paisInputValue = document.getElementById('paisInput').value;
+            fetch(`/buscar?pais=${paisInputValue}`)
+                .then(response => response.json())
+                .then(data => {
+                    // Imprime los datos en la consola para verificar la estructura
+                    console.log(data);
+
+                    // Limpia el contenedor de tarjetas antes de agregar nuevas tarjetas
+                    document.getElementById('cardContainer').innerHTML = '';
+
+                    // Crea tarjetas para cada país y agrega al contenedor
+                    data.forEach(pais => {
+                        var card = document.createElement('div');
+                        card.className = 'custom-card';
+                        card.innerHTML = `
+                            <div class="card-body p-4">
+                                <h4 class="mb-1 sfw-normal">${pais.nombre_pais.toUpperCase()}</h4>
+                                <p class="mb-2">Temperatura actual: <strong>${Math.round(pais.temperatura)}°C</strong></p>
+                                <p>Sensación: <strong>${Math.round(pais.sensacion)}°C</strong></p>
+                                <p>Max: <strong>${Math.round(pais.maxima)}°C</strong>, Min: <strong>${Math.round(pais.minima)}°C</strong></p>
+                                <p>Humedad: <strong>${Math.round(pais.humedad)}g/m³</strong></p>
+                                <p>Amanecer: <strong>${(pais.amanecer)}</strong></p>
+                                <p>Atardecer: <strong>${(pais.atardecer)}</strong></p>
+                            </div>
+                        `;
+
+                        // Agrega la tarjeta al contenedor
+                        document.getElementById('cardContainer').appendChild(card);
+                    });
+                });
+        }
+
+        document.getElementById('buscarBtn').addEventListener('click', buscar);
+
+        document.getElementById('paisInput').addEventListener('keydown', function(event) {
+            if (event.key === 'Enter') {
+                buscar();
+                // Borra el contenido del input
+                document.getElementById('paisInput').value = '';
+            }
+        });
+
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer({
+            antialias: true
+        });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(window.devicePixelRatio)
+        document.getElementById('canvas-container').appendChild(renderer.domElement);
+
+        // scene.background = new THREE.TextureLoader().load('{{ url_for("static", filename="img/stars.jpg") }}');
+
+        const backgroundStars = new THREE.Mesh(
+            new THREE.SphereGeometry(100, 30, 30),
+            new THREE.MeshBasicMaterial({
+                map: new THREE.TextureLoader().load('{{ url_for("static", filename="img/stars.jpg") }}'),
+                side: THREE.BackSide
+            })
+        )
+
+        scene.add(backgroundStars)
+
+        const earth = new THREE.Mesh(
+            new THREE.SphereGeometry(5, 30, 30),
+            new THREE.MeshStandardMaterial({
+                map: new THREE.TextureLoader().load('{{ url_for("static", filename="img/tierra_textura.jpg") }}')
+            })
+        )
+
+        scene.add(earth);
+
+        const moon = new THREE.Mesh(
+            new THREE.SphereGeometry(1, 30, 30),
+            new THREE.MeshStandardMaterial({
+                map: new THREE.TextureLoader().load('{{ url_for("static", filename="img/moon.jpg") }}')
+            })
+        );
+
+        earth.add(moon);
+
+        const sun = new THREE.Mesh(
+            new THREE.SphereGeometry(50, 30, 30),
+            new THREE.MeshBasicMaterial({
+                map: new THREE.TextureLoader().load('{{ url_for("static", filename="img/sun.jpg") }}')
+            })
+        );
+
+        earth.add(sun);
+
+        const sunLight = new THREE.PointLight(0xffffff, 1);
+        earth.add(sunLight);
+
+        earth.position.set(0, 0, -15);
+        backgroundStars.position.set(0, 0, -15);
+        moon.position.set(8, 0, 0);
+        sun.position.set(600, 0, 0);
+        sunLight.position.set(600, 0, 0);
+
+
+        camera.position.y = 0
+
+        const earthrotationSpeed = 0.002;
+        const backgroundrotationSpeed = 0.0005;
+
+        const sunRotationSpeed = 0.002;
+
+        const moonOrbitSpeed = 0.0005;
+        const sunOrbitSpeed = 0.001;
+
+        const animate = function () {
+            requestAnimationFrame(animate);
+            sun.rotation.y += sunRotationSpeed;
+            earth.rotation.y += earthrotationSpeed;
+            backgroundStars.rotation.y += backgroundrotationSpeed;
+
+            moon.position.x = 8 * Math.cos(-moonOrbitSpeed * Date.now());
+            moon.position.z = 8 * Math.sin(-moonOrbitSpeed * Date.now());
+
+            sun.position.x = 700 * Math.cos(sunOrbitSpeed * Date.now());
+            sun.position.z = 700 * Math.sin(sunOrbitSpeed * Date.now());
+            sunLight.position.x = 700 * Math.cos(sunOrbitSpeed * Date.now());
+            sunLight.position.z = 700 * Math.sin(sunOrbitSpeed * Date.now());
+
+            renderer.render(scene, camera);
+        };
+
+        animate();
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js" integrity="sha384-C6RzsynM9kWDrMNeT87bh95OGNyZPhcTNXj1NW7RuBCsyN/o0jlpcV8Qyq46cDfL" crossorigin="anonymous"></script>
+</body>
+</html>
